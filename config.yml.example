@@ -1,0 +1,10 @@
+resolvers:
+    - '1.1.1.1' # Cloudflare
+    - '8.8.8.8' # Google
+    - '9.9.9.9' # Quad9
+    - '2001:8b0::2020' # Andrews & Arnold
+
+queries:
+    - ['deliveroo.co.uk', 'a']
+    - ['google.com', 'a']
+    - ['yahoo.co.uk', 'aaaa']
