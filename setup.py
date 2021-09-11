@@ -1,8 +1,9 @@
-from setuptools import setup
+from setuptools import find_packages, setup
 
 setup(
     name='dnsrecordttl_exporter',
-    version='0.1.1',
+    version='0.2',
+    packages=find_packages('src'),
     package_dir={'': 'src'},
     install_requires=[
         'dnspython',

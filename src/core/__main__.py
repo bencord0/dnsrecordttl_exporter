@@ -9,19 +9,9 @@ from prometheus_client.core import GaugeMetricFamily, REGISTRY
 from wsgiref.simple_server import make_server
 
 parser = ArgumentParser()
-parser.add_argument('-c', '--config', default='/etc/dnsttl_reporter/config.yml')
+parser.add_argument('-c', '--config', default='/etc/dnsrecordttl_reporter/config.yml')
 
 COLLECT_TIME = Summary('dnsrecordttl_collect_time', 'Time spent collecting ttl records')
-
-RESOLVERS = set()
-QUERIES = set()
-
-def parse_config(config_file):
-    with open(config_file) as f:
-        config = yaml.safe_load(f)
-
-    RESOLVERS.update(make_resolver(r) for r in config['resolvers'])
-    QUERIES.update((tuple(q) for q in config['queries']))
 
 
 @dataclass
@@ -38,9 +28,9 @@ def make_resolver(nameserver):
     return resolver
 
 
-def make_queries():
-    for query in QUERIES:
-        for resolver in RESOLVERS:
+def make_queries(resolvers, queries):
+    for query in queries:
+        for resolver in resolvers:
             try:
                 result = resolver.query(*query)
             except NoNameservers:
@@ -54,6 +44,18 @@ def make_queries():
 
 
 class DnsRecordTTLCollector:
+    def __init__(self, config_file):
+        self._config_file = config_file
+
+    def _parse_config(self):
+        with open(self._config_file) as f:
+            config = yaml.safe_load(f)
+
+        resolvers = set(make_resolver(r) for r in config['resolvers'])
+        queries = set((tuple(q) for q in config['queries']))
+
+        return resolvers, queries
+
     @COLLECT_TIME.time()
     def collect(self):
         metric = GaugeMetricFamily(
@@ -66,8 +68,9 @@ class DnsRecordTTLCollector:
             ),
         )
 
-        queries = make_queries()
-        for query in queries:
+        resolvers, queries = self._parse_config()
+        query_results = make_queries(resolvers, queries)
+        for query in query_results:
             metric.add_metric(
                 (
                     query.rr,
@@ -76,10 +79,10 @@ class DnsRecordTTLCollector:
                 ),
                 query.ttl,
             )
+
         yield metric
 
 
-REGISTRY.register(DnsRecordTTLCollector())
 app = make_wsgi_app()
 
 
@@ -87,7 +90,9 @@ def main():
     import os
     args = parser.parse_args()
 
-    parse_config(args.config)
+    REGISTRY.register(
+        DnsRecordTTLCollector(args.config)
+    )
 
     addr = os.getenv('ADDR', 'localhost')
     port = int(os.getenv('PORT', '8000'))
